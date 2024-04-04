@@ -1,11 +1,11 @@
-import { createRunner } from '@puppeteer/replay';
+import { createRunner } from '@puppeteer/replay'
 
-export async function run(steps, extension) {
-    const runner = await createRunner(steps, extension);
+export async function run (steps, extension) {
+  const runner = await createRunner(steps, extension)
 
-    await runner.runBeforeAllSteps();
+  await runner.runBeforeAllSteps()
 
-    await runner.run();
+  await runner.run()
 
-    await runner.runAfterAllSteps();
+  await runner.runAfterAllSteps()
 }

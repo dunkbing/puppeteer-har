@@ -4,28 +4,40 @@
   "description": "Generate HAR file with Puppeteer",
   "type": "module",
   "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "lint": "eslint --fix --ext .js,.jsx ."
+  },
   "directories": {
     "lib": "lib"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Everettss/puppeteer-har"
+    "url": "https://github.com/dunkbing/puppeteer-har"
   },
   "keywords": [
     "har",
     "puppeteer",
     "performance"
   ],
-  "author": "Michał Janaszek",
+  "author": "Dunkbing",
   "license": "MIT",
   "dependencies": {
+    "@hono/node-server": "^1.9.1",
     "@puppeteer/replay": "^3.0.0",
     "chrome-har": "^0.11.12",
-    "express": "^4.18.3",
+    "hono": "^4.2.1",
     "lighthouse": "^11.7.0",
     "puppeteer": "^22.4.1"
   },
   "engines": {
-    "node": ">=7.6.0"
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.1",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-n": "^15.0.0 || ^16.0.0 ",
+    "eslint-plugin-promise": "^6.0.0"
   }
 }
