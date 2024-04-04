@@ -1,0 +1,9 @@
+version: '3'
+name: har-exporter
+services:
+  puppeteer-har:
+    container_name: puppeteer-har
+    ports:
+      - 3000:3000
+    image: dunkbing/puppeteer-har:latest
+    restart: always

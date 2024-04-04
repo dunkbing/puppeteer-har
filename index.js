@@ -100,8 +100,9 @@ app.post("/run", async (req, res) => {
   });
 });
 
-app.get('/har/:name', async (req, res) => {
-  const filename = req.params.name
+app.get('/har-file', async (req, res) => {
+  const filename = req.query.filename
+
   const filepath = path.join(import.meta.dirname, 'har', filename)
   if (!fs.existsSync(filepath)) {
     return res.status(500).json({ error: "file not found" })
