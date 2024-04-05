@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { compress } from 'hono/compress'
+import { cors } from 'hono/cors'
 import crypto from 'crypto'
 import { launch } from 'puppeteer'
 import { createRunner, PuppeteerRunnerExtension } from '@puppeteer/replay'
@@ -8,10 +9,10 @@ import fs from 'fs'
 import { readFile } from 'fs/promises'
 import path from 'path'
 import lighthouse from 'lighthouse'
+import url from 'url'
 
 import { wait, stringToSlug } from './lib/utils.js'
 import PuppeteerHar from './lib/PuppeteerHar.js'
-import url from 'url'
 
 const ua =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
@@ -20,6 +21,7 @@ const headers = { 'user-agent': ua }
 const app = new Hono()
 app.use(logger())
 app.use(compress())
+app.use(cors({ origin: '*' }))
 
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 // const __filename = url.fileURLToPath(import.meta.url);
