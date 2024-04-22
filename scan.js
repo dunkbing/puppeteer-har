@@ -30,7 +30,6 @@ export async function openBrowser () {
  * @param {import('puppeteer').Browser} browser
  */
 export async function runHar (browser, data) {
-  console.time('export har')
   const title = data.steps?.title || crypto.randomUUID()
   const page = await browser.newPage()
   page.setDefaultNavigationTimeout(0)
@@ -44,7 +43,7 @@ export async function runHar (browser, data) {
   }
   await har.start({ path: outputFile })
 
-  if (Object.keys(data.steps).length) {
+  if (data.steps && Object.keys(data.steps).length) {
     const runner = await createRunner(
       data.steps,
       new PuppeteerRunnerExtension(browser, page, { timeout: 60000 })
@@ -60,13 +59,10 @@ export async function runHar (browser, data) {
 
   const stats = fs.statSync(outputFile)
   const size = stats.size
-  console.timeEnd('export har')
   return { file: filename, size }
 }
 
 export async function runLh (browser, url) {
-  const logKey = `run lighthouse for: ${url}`
-  console.time(logKey)
   const page = await browser.newPage()
   page.setExtraHTTPHeaders(headers)
   const { lhr } = await lighthouse(url, undefined, undefined, page)
@@ -84,7 +80,6 @@ export async function runLh (browser, url) {
   const speedIndex = audits['speed-index'].numericValue
 
   await page.close()
-  console.timeEnd(logKey)
 
   return {
     firstContentfulPaint,

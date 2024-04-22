@@ -24,10 +24,8 @@
   "author": "Dunkbing",
   "license": "MIT",
   "dependencies": {
-    "@hono/node-server": "^1.9.1",
     "@puppeteer/replay": "^3.0.0",
     "chrome-har": "^0.11.12",
-    "hono": "^4.2.1",
     "ioredis": "^5.3.2",
     "lighthouse": "^11.7.0",
     "puppeteer": "^22.4.1"
