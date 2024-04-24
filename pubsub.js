@@ -2,7 +2,7 @@ import Redis from 'ioredis'
 
 import { config } from './config.js'
 
-const cred = {
+export const cred = {
   host: config.redisHost,
   port: config.redisPort,
   username: config.redisUser,

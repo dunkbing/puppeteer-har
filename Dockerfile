@@ -15,4 +15,4 @@ COPY --chown=pptruser:pptruser --from=base /app /app
 ENV PORT=3000
 EXPOSE $PORT
 USER pptruser
-ENTRYPOINT [ "node", "index.js" ]
+ENTRYPOINT [ "node", "main.js" ]

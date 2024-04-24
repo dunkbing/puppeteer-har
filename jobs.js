@@ -1,68 +1,62 @@
+import { parentPort, threadId } from 'worker_threads'
 import path from 'path'
 import fs from 'fs'
 import { readFile } from 'fs/promises'
+import { Worker } from 'bullmq'
 
 import { config } from './config.js'
-import { connectAll, publisher, subscriber } from './pubsub.js'
+import { cred, publisher } from './pubsub.js'
 import { openBrowser, runHar, runLh, harDir } from './scan.js'
-import { wait } from './lib/utils.js'
 
-const queue = []
-const processingTask = { value: false }
+const worker = new Worker('scan-job', async (job) => {
+  if (job.name !== 'start-monitoring') return
 
-export async function startJobs () {
-  await connectAll()
-  console.log('Starting jobs')
-  subscriber.subscribe('start', (err, count) => {
-    if (err) {
-      // ex network issues.
-      console.error('Failed to subscribe: %s', err.message)
-    } else {
-      console.log(
-        `Subscribed successfully! This client is currently subscribed to ${count} channels.`
-      )
-    }
-  })
+  const steps = job.data
+  const { agentId, scanId, url } = steps
+  const label = `thread-${threadId} scan-for ${scanId} ${url}`
+  console.log(label)
 
-  subscriber.on('message', async (channel, message) => {
-    if (channel === 'start') {
-      const steps = JSON.parse(message)
-      queue.push(steps)
-    }
-  })
-
-  setInterval(async () => {
-    if (!queue.length || processingTask.value) {
-      return
-    }
-    const steps = queue.pop()
-    processingTask.value = true
-    const { agentId, scanId, url } = steps
-    const label = `scan-for-${scanId}`
-    console.log(label)
+  let browser
+  try {
     console.time(label)
     if (agentId !== config.agentId) {
       return
     }
 
-    const browser = await openBrowser()
-    const [{ file }, lh] = await Promise.all([
+    browser = await openBrowser()
+    let res = { id: scanId }
+    const [har, lh] = await Promise.allSettled([
       runHar(browser, steps),
       runLh(browser, url)
     ])
-    const filepath = path.join(harDir, file)
-    if (!fs.existsSync(filepath)) {
-      console.log('file not found', filepath)
+    if (lh.status === 'fulfilled') {
+      res = { ...res, ...lh.value }
     }
-    const data = await readFile(filepath, { encoding: 'utf-8' })
+    if (har.status === 'fulfilled') {
+      const { file } = har.value
+      const filepath = path.join(harDir, file)
+      if (!fs.existsSync(filepath)) {
+        console.log('file not found', filepath)
+      } else {
+        const data = await readFile(filepath, { encoding: 'utf-8' })
+        res = { ...res, har: JSON.parse(data) }
+      }
+    }
+
     publisher.publish(
       'scan-result',
-      JSON.stringify({ id: scanId, ...lh, har: JSON.parse(data) })
+      JSON.stringify(res)
     )
 
     await browser.close()
-    processingTask.value = false
     console.timeEnd(label)
-    await wait(1500)
-  }, 2000)
-}
+    parentPort.postMessage(`thread_id: ${threadId} done`)
+  } catch (e) {
+    console.log('job error', url, scanId, e)
+    browser?.close()
+  }
+}, { connection: cred })
+
+worker.on('error', (err) => {
+  console.log(`worker ${threadId} error`, err)
+})
