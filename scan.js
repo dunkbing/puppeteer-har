@@ -5,8 +5,9 @@ import path from 'path'
 import fs from 'fs'
 import url from 'url'
 import lighthouse from 'lighthouse'
+import desktopConfig from 'lighthouse/core/config/desktop-config.js'
 
-import { wait, stringToSlug } from './lib/utils.js'
+import { stringToSlug } from './lib/utils.js'
 import PuppeteerHar from './lib/PuppeteerHar.js'
 
 const ua =
@@ -16,13 +17,19 @@ const headers = { 'user-agent': ua }
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 // const __filename = url.fileURLToPath(import.meta.url);
 
+const timeout = 60000
+
 export const harDir = path.join(__dirname, 'har')
 if (!fs.existsSync(harDir)) {
   fs.mkdirSync(harDir)
 }
 
 export async function openBrowser () {
-  const browser = await launch({ args: ['--no-sandbox'], headless: true })
+  const browser = await launch({
+    defaultViewport: null,
+    args: ['--no-sandbox', '--start-maximized'],
+    headless: true
+  })
   return browser
 }
 
@@ -32,8 +39,9 @@ export async function openBrowser () {
 export async function runHar (browser, data) {
   const title = data.steps?.title || crypto.randomUUID()
   const page = await browser.newPage()
-  page.setDefaultNavigationTimeout(0)
+  page.setDefaultNavigationTimeout(timeout)
   page.setExtraHTTPHeaders(headers)
+  page.setViewport({ width: 0, height: 0 })
   const har = new PuppeteerHar(page)
   const filename = `${stringToSlug(title)}.har`
   const outputFile = path.join(harDir, filename)
@@ -44,16 +52,22 @@ export async function runHar (browser, data) {
   await har.start({ path: outputFile })
 
   if (data.steps && Object.keys(data.steps).length) {
-    const runner = await createRunner(
+    await createRunner(
       data.steps,
-      new PuppeteerRunnerExtension(browser, page, { timeout: 60000 })
-    )
-    await runner.run()
+      new PuppeteerRunnerExtension(browser, page, { timeout })
+    ).then(async (runner) => {
+      try {
+        return await runner.run()
+      } catch (err) {
+        return console.log('run steps error', err)
+      }
+    }).catch(err => {
+      console.log('create runner error', err)
+    })
   } else {
     await page.goto(data.url)
   }
 
-  await wait(1000)
   await har.stop()
   await page.close()
 
@@ -64,8 +78,10 @@ export async function runHar (browser, data) {
 
 export async function runLh (browser, url) {
   const page = await browser.newPage()
+  page.setDefaultNavigationTimeout(timeout)
   page.setExtraHTTPHeaders(headers)
-  const { lhr } = await lighthouse(url, undefined, undefined, page)
+  page.setViewport({ width: 0, height: 0 })
+  const { lhr } = await lighthouse(url, undefined, desktopConfig, page)
   const overallScore = Object.entries(lhr.categories).reduce((acc, [k, v]) => {
     acc[k] = v.score
     return acc
