@@ -7,3 +7,5 @@ export const config = {
   redisUser: process.env.REDIS_USER,
   redisPw: process.env.REDIS_PW
 }
+
+export const taskQueueName = `scan-job-${config.agentId}`

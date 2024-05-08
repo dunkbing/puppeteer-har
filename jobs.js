@@ -1,27 +1,31 @@
-import { parentPort, threadId } from 'worker_threads'
+import { parentPort, threadId } from 'node:worker_threads'
 import path from 'path'
 import fs from 'fs'
 import { readFile } from 'fs/promises'
 import { Worker } from 'bullmq'
 
-import { config } from './config.js'
+import { config, taskQueueName } from './config.js'
 import { cred, publisher } from './pubsub.js'
 import { openBrowser, runHar, runLh, harDir } from './scan.js'
+import { calculateFinishTime } from './calculate_finished_time.js'
 
-const worker = new Worker('scan-job', async (job) => {
-  if (job.name !== 'start-monitoring') return
+console.log('worker', threadId, 'spawned')
+
+const worker = new Worker(taskQueueName, async (job) => {
+  const jobName = `start-monitoring-${config.agentId}`
+  if (job.name !== jobName) {
+    console.warn('invalid job name', job.name, jobName)
+    return
+  }
 
   const steps = job.data
-  const { agentId, scanId, url } = steps
+  const { scanId, url } = steps
   const label = `thread-${threadId} scan-for ${scanId} ${url}`
   console.log(label)
 
   let browser
   try {
     console.time(label)
-    if (agentId !== config.agentId) {
-      return
-    }
 
     browser = await openBrowser()
     let res = { id: scanId }
@@ -39,7 +43,9 @@ const worker = new Worker('scan-job', async (job) => {
         console.log('file not found', filepath)
       } else {
         const data = await readFile(filepath, { encoding: 'utf-8' })
-        res = { ...res, har: JSON.parse(data) }
+        const har = JSON.parse(data)
+        const finishTime = calculateFinishTime(har.log.entries)
+        res = { ...res, finishTime, har }
       }
     }
 
@@ -49,11 +55,12 @@ const worker = new Worker('scan-job', async (job) => {
     )
 
     await browser.close()
-    console.timeEnd(label)
     parentPort.postMessage(`thread_id: ${threadId} done`)
   } catch (e) {
     console.log('job error', url, scanId, e)
     browser?.close()
+  } finally {
+    console.timeEnd(label)
   }
 }, { connection: cred })
 
