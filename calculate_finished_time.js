@@ -10,7 +10,8 @@ export const formatTime = (time) => {
 
 export const getTimings = ({ startedDateTime, timings }, firstEntryTime) => ({
   ...timings,
-  startTime: new Date(startedDateTime).getTime() - new Date(firstEntryTime).getTime()
+  startTime: new Date(startedDateTime).getTime() -
+    new Date(firstEntryTime).getTime()
 })
 
 export const calculateFinishTime = (entries) => {
@@ -32,7 +33,8 @@ export const calculateFinishTime = (entries) => {
   const finishTimes = data.map(({ timings }) => (
     Object.values(timings).reduce((acc, durationInMS) => (
       acc + (durationInMS > -1 ? durationInMS : 0)
-    ), 0)))
+    ), 0)
+  ))
   return Math.max(...finishTimes)
 }
 

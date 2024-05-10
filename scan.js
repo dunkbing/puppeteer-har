@@ -61,7 +61,7 @@ export async function runHar (browser, data) {
       } catch (err) {
         return console.log('run steps error', err)
       }
-    }).catch(err => {
+    }).catch((err) => {
       console.log('create runner error', err)
     })
   } else {
@@ -76,7 +76,23 @@ export async function runHar (browser, data) {
   return { file: filename, size }
 }
 
+function isValidHttpUrl (str) {
+  let url_
+
+  try {
+    url_ = new URL(str)
+  } catch (_) {
+    return false
+  }
+
+  return url_.protocol === 'http:' || url_.protocol === 'https:'
+}
+
 export async function runLh (browser, url) {
+  if (!isValidHttpUrl(url)) {
+    console.warn('Invalid url', url)
+    return
+  }
   const page = await browser.newPage()
   page.setDefaultNavigationTimeout(timeout)
   page.setExtraHTTPHeaders(headers)

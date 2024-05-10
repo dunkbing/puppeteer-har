@@ -6,7 +6,7 @@ import { Worker } from 'bullmq'
 
 import { config, taskQueueName } from './config.js'
 import { cred, publisher } from './pubsub.js'
-import { openBrowser, runHar, runLh, harDir } from './scan.js'
+import { harDir, openBrowser, runHar, runLh } from './scan.js'
 import { calculateFinishTime } from './calculate_finished_time.js'
 
 console.log('worker', threadId, 'spawned')
@@ -20,7 +20,7 @@ const worker = new Worker(taskQueueName, async (job) => {
 
   const steps = job.data
   const { scanId, url } = steps
-  const label = `thread-${threadId} scan-for ${scanId} ${url}`
+  const label = `${new Date().toString()}-thread-${threadId} scan-for ${scanId} ${url}`
   console.log(label)
 
   let browser
@@ -35,6 +35,8 @@ const worker = new Worker(taskQueueName, async (job) => {
     ])
     if (lh.status === 'fulfilled') {
       res = { ...res, ...lh.value }
+    } else {
+      console.error('Error running lh', lh.reason)
     }
     if (har.status === 'fulfilled') {
       const { file } = har.value
@@ -47,6 +49,8 @@ const worker = new Worker(taskQueueName, async (job) => {
         const finishTime = calculateFinishTime(har.log.entries)
         res = { ...res, finishTime, har }
       }
+    } else {
+      console.error('Error running har', har.reason)
     }
 
     publisher.publish(

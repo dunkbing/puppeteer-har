@@ -2,7 +2,7 @@ import { Worker } from 'node:worker_threads'
 import { Queue } from 'bullmq'
 
 import { config, taskQueueName } from './config.js'
-import { connectAll, subscriber, cred } from './pubsub.js'
+import { connectAll, cred, subscriber } from './pubsub.js'
 
 const currentThreads = {}
 
@@ -28,7 +28,10 @@ async function startJobs () {
       if (config.agentId !== agentId) {
         return
       }
-      taskQueue.add(`start-monitoring-${config.agentId}`, steps, { removeOnComplete: true, removeOnFail: true })
+      taskQueue.add(`start-monitoring-${config.agentId}`, steps, {
+        removeOnComplete: true,
+        removeOnFail: true
+      })
     }
   })
 }
@@ -36,7 +39,7 @@ async function startJobs () {
 const runService = () => {
   const worker = new Worker('./jobs.js')
   console.log('spawning new worker', worker.threadId)
-  currentThreads[worker.threadId] = true
+  currentThreads[worker.threadId] = worker
 
   worker.on('message', (val) => {
     console.log('message', val)
@@ -45,9 +48,9 @@ const runService = () => {
     console.log('error', err)
   })
   worker.on('exit', (code) => {
+    console.log('exit', code, worker.threadId)
     if (code !== 0) {
       console.log(`worker ${worker.threadId} stopped with ${code} exit code`)
-      delete currentThreads[worker.threadId]
     }
   })
 }
@@ -55,7 +58,14 @@ const runService = () => {
 const run = async () => {
   startJobs()
   setInterval(() => {
-    const currentThreadsNum = Object.keys(currentThreads)
+    let keys = Object.keys(currentThreads)
+    const currentThreadsNum = keys.length
+    for (const k of keys) {
+      if (currentThreads[k].threadId <= 0) {
+        delete currentThreads[k]
+      }
+    }
+    keys = Object.keys(currentThreads)
     if (currentThreadsNum < config.threadsNum) {
       runService()
     }
