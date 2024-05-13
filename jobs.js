@@ -8,6 +8,7 @@ import { config, taskQueueName } from './config.js'
 import { cred, publisher } from './pubsub.js'
 import { harDir, openBrowser, runHar, runLh } from './scan.js'
 import { calculateFinishTime } from './calculate_finished_time.js'
+import { isValidHttpUrl, wait } from './lib/utils.js'
 
 console.log('worker', threadId, 'spawned')
 
@@ -20,6 +21,10 @@ const worker = new Worker(taskQueueName, async (job) => {
 
   const steps = job.data
   const { scanId, url } = steps
+  if (!isValidHttpUrl(url)) {
+    console.log('Invalid url', url)
+    return
+  }
   const label = `${new Date().toString()}-thread-${threadId} scan-for ${scanId} ${url}`
   console.log(label)
 
@@ -29,17 +34,12 @@ const worker = new Worker(taskQueueName, async (job) => {
 
     browser = await openBrowser()
     let res = { id: scanId }
-    const [har, lh] = await Promise.allSettled([
-      runHar(browser, steps),
-      runLh(browser, url)
-    ])
-    if (lh.status === 'fulfilled') {
-      res = { ...res, ...lh.value }
+
+    const [har, harErr] = await runHar(browser, steps)
+    if (harErr) {
+      console.error('Error running har', harErr)
     } else {
-      console.error('Error running lh', lh.reason)
-    }
-    if (har.status === 'fulfilled') {
-      const { file } = har.value
+      const { file } = har
       const filepath = path.join(harDir, file)
       if (!fs.existsSync(filepath)) {
         console.log('file not found', filepath)
@@ -49,22 +49,27 @@ const worker = new Worker(taskQueueName, async (job) => {
         const finishTime = calculateFinishTime(har.log.entries)
         res = { ...res, finishTime, har }
       }
-    } else {
-      console.error('Error running har', har.reason)
     }
+    const [lh, lhErr] = await runLh(browser, url)
+    if (lhErr) {
+      console.error('Error running lh', lhErr)
+    } else {
+      res = { ...res, ...lh }
+    }
+    await browser.close()
 
     publisher.publish(
       'scan-result',
       JSON.stringify(res)
     )
 
-    await browser.close()
     parentPort.postMessage(`thread_id: ${threadId} done`)
   } catch (e) {
     console.log('job error', url, scanId, e)
-    browser?.close()
   } finally {
     console.timeEnd(label)
+    await wait(5000)
+    browser?.close()
   }
 }, { connection: cred })
 

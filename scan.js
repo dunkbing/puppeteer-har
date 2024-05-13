@@ -27,7 +27,18 @@ if (!fs.existsSync(harDir)) {
 export async function openBrowser () {
   const browser = await launch({
     defaultViewport: null,
-    args: ['--no-sandbox', '--start-maximized'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--start-maximized',
+      '--lang=en-US',
+      '--disable-infobars',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage',
+      '--disable-extensions',
+      '--disable-gpu',
+      '--disable-audio'
+    ],
     headless: true
   })
   return browser
@@ -37,88 +48,80 @@ export async function openBrowser () {
  * @param {import('puppeteer').Browser} browser
  */
 export async function runHar (browser, data) {
-  const title = data.steps?.title || crypto.randomUUID()
-  const page = await browser.newPage()
-  page.setDefaultNavigationTimeout(timeout)
-  page.setExtraHTTPHeaders(headers)
-  page.setViewport({ width: 0, height: 0 })
-  const har = new PuppeteerHar(page)
-  const filename = `${stringToSlug(title)}.har`
-  const outputFile = path.join(harDir, filename)
-
-  if (fs.existsSync(outputFile)) {
-    fs.unlinkSync(outputFile)
-  }
-  await har.start({ path: outputFile })
-
-  if (data.steps && Object.keys(data.steps).length) {
-    await createRunner(
-      data.steps,
-      new PuppeteerRunnerExtension(browser, page, { timeout })
-    ).then(async (runner) => {
-      try {
-        return await runner.run()
-      } catch (err) {
-        return console.log('run steps error', err)
-      }
-    }).catch((err) => {
-      console.log('create runner error', err)
-    })
-  } else {
-    await page.goto(data.url)
-  }
-
-  await har.stop()
-  await page.close()
-
-  const stats = fs.statSync(outputFile)
-  const size = stats.size
-  return { file: filename, size }
-}
-
-function isValidHttpUrl (str) {
-  let url_
-
   try {
-    url_ = new URL(str)
-  } catch (_) {
-    return false
-  }
+    const title = data.steps?.title || crypto.randomUUID()
+    const page = await browser.newPage()
+    page.setDefaultNavigationTimeout(timeout)
+    page.setExtraHTTPHeaders(headers)
+    page.setViewport({ width: 0, height: 0 })
+    const har = new PuppeteerHar(page)
+    const filename = `${stringToSlug(title)}.har`
+    const outputFile = path.join(harDir, filename)
 
-  return url_.protocol === 'http:' || url_.protocol === 'https:'
+    if (fs.existsSync(outputFile)) {
+      fs.unlinkSync(outputFile)
+    }
+    await har.start({ path: outputFile })
+
+    if (data.steps && Object.keys(data.steps).length) {
+      await createRunner(
+        data.steps,
+        new PuppeteerRunnerExtension(browser, page, { timeout })
+      ).then(async (runner) => {
+        try {
+          return await runner.run()
+        } catch (err) {
+          return console.log('run steps error', err)
+        }
+      }).catch((err) => {
+        console.log('create runner error', err)
+      })
+    } else {
+      await page.goto(data.url)
+    }
+
+    await har.stop()
+    await page.close()
+
+    const stats = fs.statSync(outputFile)
+    const size = stats.size
+    return [{ file: filename, size }, null]
+  } catch (err) {
+    return [null, err]
+  }
 }
 
 export async function runLh (browser, url) {
-  if (!isValidHttpUrl(url)) {
-    console.warn('Invalid url', url)
-    return
-  }
-  const page = await browser.newPage()
-  page.setDefaultNavigationTimeout(timeout)
-  page.setExtraHTTPHeaders(headers)
-  page.setViewport({ width: 0, height: 0 })
-  const { lhr } = await lighthouse(url, undefined, desktopConfig, page)
-  const overallScore = Object.entries(lhr.categories).reduce((acc, [k, v]) => {
-    acc[k] = v.score
-    return acc
-  }, {})
+  try {
+    const page = await browser.newPage()
+    page.setDefaultNavigationTimeout(timeout)
+    page.setExtraHTTPHeaders(headers)
+    page.setViewport({ width: 0, height: 0 })
+    const { lhr } = await lighthouse(url, undefined, desktopConfig, page)
+    const overallScore = Object.entries(lhr.categories).reduce((acc, [k, v]) => {
+      acc[k] = v.score
+      return acc
+    }, {})
 
-  const { audits } = lhr
-  const firstContentfulPaint = audits['first-contentful-paint'].numericValue
-  const largestContentfulPaint =
-    audits['largest-contentful-paint'].numericValue
-  const serverResponseTime = audits['server-response-time'].numericValue
-  const timeToInteractive = audits.interactive.numericValue
-  const speedIndex = audits['speed-index'].numericValue
+    const { audits } = lhr
+    const firstContentfulPaint = audits['first-contentful-paint'].numericValue
+    const largestContentfulPaint =
+        audits['largest-contentful-paint'].numericValue
+    const serverResponseTime = audits['server-response-time'].numericValue
+    const timeToInteractive = audits.interactive.numericValue
+    const speedIndex = audits['speed-index'].numericValue
 
-  await page.close()
+    await page.close()
 
-  return {
-    firstContentfulPaint,
-    largestContentfulPaint,
-    serverResponseTime,
-    timeToInteractive,
-    speedIndex,
-    overallScore
+    return [{
+      firstContentfulPaint,
+      largestContentfulPaint,
+      serverResponseTime,
+      timeToInteractive,
+      speedIndex,
+      overallScore
+    }, null]
+  } catch (err) {
+    return [null, err]
   }
 }

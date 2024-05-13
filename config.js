@@ -5,7 +5,8 @@ export const config = {
   redisHost: process.env.REDIS_HOST,
   redisPort: Number(process.env.REDIS_PORT),
   redisUser: process.env.REDIS_USER,
-  redisPw: process.env.REDIS_PW
+  redisPw: process.env.REDIS_PW,
+  threadMemoryLimit: Number(process.env.THREAD_MEMORY_LIMIT || 1200)
 }
 
 export const taskQueueName = `scan-job-${config.agentId}`

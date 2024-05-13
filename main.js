@@ -37,7 +37,9 @@ async function startJobs () {
 }
 
 const runService = () => {
-  const worker = new Worker('./jobs.js')
+  const worker = new Worker('./jobs.js', {
+    resourceLimits: { maxOldGenerationSizeMb: config.threadMemoryLimit }
+  })
   console.log('spawning new worker', worker.threadId)
   currentThreads[worker.threadId] = worker
 
@@ -45,10 +47,9 @@ const runService = () => {
     console.log('message', val)
   })
   worker.on('error', (err) => {
-    console.log('error', err)
+    console.log('worker error', worker.threadId, err)
   })
   worker.on('exit', (code) => {
-    console.log('exit', code, worker.threadId)
     if (code !== 0) {
       console.log(`worker ${worker.threadId} stopped with ${code} exit code`)
     }
@@ -58,14 +59,13 @@ const runService = () => {
 const run = async () => {
   startJobs()
   setInterval(() => {
-    let keys = Object.keys(currentThreads)
-    const currentThreadsNum = keys.length
+    const keys = Object.keys(currentThreads)
     for (const k of keys) {
       if (currentThreads[k].threadId <= 0) {
         delete currentThreads[k]
       }
     }
-    keys = Object.keys(currentThreads)
+    const currentThreadsNum = Object.keys(currentThreads).length
     if (currentThreadsNum < config.threadsNum) {
       runService()
     }
