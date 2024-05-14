@@ -17,7 +17,7 @@ const headers = { 'user-agent': ua }
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 // const __filename = url.fileURLToPath(import.meta.url);
 
-const timeout = 60000
+const timeout = 120000
 
 export const harDir = path.join(__dirname, 'har')
 if (!fs.existsSync(harDir)) {
@@ -44,6 +44,7 @@ export async function openBrowser (overwriteHost) {
   }
   const browser = await launch({
     defaultViewport: null,
+    ignoreHTTPSErrors: true,
     args,
     headless: true
   })
@@ -56,15 +57,16 @@ export async function openBrowser (overwriteHost) {
 export async function runHar (browser, data) {
   let page
   let timeoutId
+  const title = data.steps?.title || crypto.randomUUID()
+  const filename = `${stringToSlug(title)}.har`
+  const outputFile = path.join(harDir, filename)
+  let harErr = null
   try {
-    const title = data.steps?.title || crypto.randomUUID()
     page = await browser.newPage()
     page.setDefaultNavigationTimeout(timeout)
     page.setExtraHTTPHeaders(headers)
     page.setViewport({ width: 0, height: 0 })
     const har = new PuppeteerHar(page)
-    const filename = `${stringToSlug(title)}.har`
-    const outputFile = path.join(harDir, filename)
 
     if (fs.existsSync(outputFile)) {
       fs.unlinkSync(outputFile)
@@ -95,16 +97,16 @@ export async function runHar (browser, data) {
 
     await har.stop()
     await page.close()
-
-    const stats = fs.statSync(outputFile)
-    const size = stats.size
-    return [{ file: filename, size }, null]
   } catch (err) {
-    return [null, err]
+    harErr = err
   } finally {
     clearTimeout(timeoutId)
     if (!page?.isClosed()) page?.close()
   }
+  if (!fs.existsSync(outputFile)) return [null, harErr]
+  const stats = fs.statSync(outputFile)
+  const size = stats.size
+  return [{ file: filename, size }, null]
 }
 
 export async function runLh (browser, url) {
