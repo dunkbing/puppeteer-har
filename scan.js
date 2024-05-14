@@ -24,21 +24,27 @@ if (!fs.existsSync(harDir)) {
   fs.mkdirSync(harDir)
 }
 
-export async function openBrowser () {
+export async function openBrowser (overwriteHost) {
+  const args = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--start-maximized',
+    '--lang=en-US',
+    '--disable-infobars',
+    '--disable-blink-features=AutomationControlled',
+    '--disable-dev-shm-usage',
+    '--disable-extensions',
+    '--disable-gpu',
+    '--disable-audio'
+  ]
+  if (overwriteHost) {
+    console.log('overwrite host', overwriteHost)
+    // args.push('--host-resolver-rules=MAP google.com 127.0.0.1')
+    args.push(`--host-resolver-rules=MAP ${overwriteHost}`)
+  }
   const browser = await launch({
     defaultViewport: null,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--start-maximized',
-      '--lang=en-US',
-      '--disable-infobars',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-dev-shm-usage',
-      '--disable-extensions',
-      '--disable-gpu',
-      '--disable-audio'
-    ],
+    args,
     headless: true
   })
   return browser
@@ -48,9 +54,11 @@ export async function openBrowser () {
  * @param {import('puppeteer').Browser} browser
  */
 export async function runHar (browser, data) {
+  let page
+  let timeoutId
   try {
     const title = data.steps?.title || crypto.randomUUID()
-    const page = await browser.newPage()
+    page = await browser.newPage()
     page.setDefaultNavigationTimeout(timeout)
     page.setExtraHTTPHeaders(headers)
     page.setViewport({ width: 0, height: 0 })
@@ -63,19 +71,24 @@ export async function runHar (browser, data) {
     }
     await har.start({ path: outputFile })
 
+    timeoutId = setTimeout(async () => {
+      console.log('exceeded timeout', data.url)
+      await har.stop()
+      await page.close()
+    }, timeout - 3000)
+
     if (data.steps && Object.keys(data.steps).length) {
-      await createRunner(
-        data.steps,
-        new PuppeteerRunnerExtension(browser, page, { timeout })
-      ).then(async (runner) => {
-        try {
-          return await runner.run()
-        } catch (err) {
-          return console.log('run steps error', err)
-        }
-      }).catch((err) => {
-        console.log('create runner error', err)
-      })
+      await createRunner(data.steps, new PuppeteerRunnerExtension(browser, page, { timeout }))
+        .then(async (runner) => {
+          try {
+            return await runner.run()
+          } catch (err) {
+            return console.log('run steps error', err)
+          }
+        })
+        .catch((err) => {
+          console.log('create runner error', err)
+        })
     } else {
       await page.goto(data.url)
     }
@@ -88,6 +101,9 @@ export async function runHar (browser, data) {
     return [{ file: filename, size }, null]
   } catch (err) {
     return [null, err]
+  } finally {
+    clearTimeout(timeoutId)
+    if (!page?.isClosed()) page?.close()
   }
 }
 

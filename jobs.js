@@ -20,7 +20,7 @@ const worker = new Worker(taskQueueName, async (job) => {
   }
 
   const steps = job.data
-  const { scanId, url } = steps
+  const { scanId, url, overwriteHost } = steps
   if (!isValidHttpUrl(url)) {
     console.log('Invalid url', url)
     return
@@ -31,8 +31,12 @@ const worker = new Worker(taskQueueName, async (job) => {
   let browser
   try {
     console.time(label)
-
-    browser = await openBrowser()
+    if (overwriteHost) {
+      const { hostname } = new URL(url)
+      browser = await openBrowser(`${hostname} ${overwriteHost}`)
+    } else {
+      browser = await openBrowser()
+    }
     let res = { id: scanId }
 
     const [har, harErr] = await runHar(browser, steps)
